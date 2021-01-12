@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit
+fi
+
+SETUP_PATH=$(pwd)
+
+tmp_dir=$(mktemp -d -t ci-XXXXXXXXXX)
+
+cd $tmp_dir
+
+echo "Downloading xcap..."
+wget ftp://ftp.epixinc.com/software/xcap_v38/xcaplnx_x86_64.bin 2>> installation.log
+
+echo "Installing xcap: Use license code from invoice"
+chmod +777 xcaplnx_x86_64.bin
+./xcaplnx_x86_64.bin
+
+

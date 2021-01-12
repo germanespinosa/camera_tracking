@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit
+fi
+
+SETUP_PATH=$(pwd)
+
+tmp_dir=$(mktemp -d -t ci-XXXXXXXXXX)
+
+cd $tmp_dir
+
+echo "Downloading xclib..."
+wget ftp://ftp.epixinc.com/software/xclib_v38/xcliplnx_x86_64.bin 2>> installation.log
+
+echo "Installing xclib: Use license code from invoice"
+chmod +777 xcliplnx_x86_64.bin
+./xcliplnx_x86_64.bin

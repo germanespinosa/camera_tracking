@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit
+fi
+
+tmp_dir=$(mktemp -d -t ci-XXXXXXXXXX)
+
+cd $tmp_dir
+
+echo "Downloading cuda..."
+wget https://developer.download.nvidia.com/compute/cuda/11.2.0/local_installers/cuda_11.2.0_460.27.04_linux.run 2>> installation.log
+echo "Running cuda installer..."
+sh cuda_11.2.0_460.27.04_linux.run

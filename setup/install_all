@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit
+fi
+
+
+./install_prerequisites
+./install_cuda
+./install_opencv
+./install_xclib
+./install_xcap
