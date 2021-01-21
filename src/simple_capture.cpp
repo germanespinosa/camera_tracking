@@ -134,7 +134,6 @@ frameGrabber::frameGrabber(const char* configPath, bool doLensCorrection_,
 
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-    cout << "\ntime: "<<duration.count() << endl;
 
 
   }

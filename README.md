@@ -44,5 +44,5 @@ A description of all executables:-
                       2. Tracks the position of the robot online
                       3. Writes the raw data from the camera views into the 
                       folder specified initially
-                      4. Stitches images togther and writes the stitched image
+                      4. Stitches images together and writes the stitched image
                       into the specified folder

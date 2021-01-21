@@ -12,9 +12,9 @@
 
 
 #include "opencv2/calib3d/calib3d.hpp"
-#include <jsoncpp/json/json.h>
 
 #include "utility_functions.hpp"
+#include <json_cpp.h>
 
 using std::to_string;
 using std::pow;
@@ -24,8 +24,9 @@ using std::make_tuple;
 pthread_mutex_t lock;
 using namespace std::chrono;
 
+using namespace  json_cpp;
 
-cameraCellAssociator::cameraCellAssociator(string fileName)
+Coordinates_associator::Coordinates_associator(string fileName)
   // CellAssociator call associates a given mice position with a cell in which it exits
   // fileName- filePath where the cellAssociation config file is stored
 {
@@ -43,7 +44,7 @@ cameraCellAssociator::cameraCellAssociator(string fileName)
 }
 
 
-vector<int> cameraCellAssociator::return_closest_cell(int mice_x, int mice_y)
+cell_world::Coordinates Coordinates_associator::get_coordinates(int mice_x, int mice_y)
   // Given a x,y mice location, this function returns the cell which contains the given x,y
   // pixel location
   {
@@ -52,12 +53,12 @@ vector<int> cameraCellAssociator::return_closest_cell(int mice_x, int mice_y)
     for(int i=0; i < cell_centers.size(); ++i)
     {
       auto point = cell_centers[i];
-      distances[i] = pow(pow(point[0] - mice_x, 2)+
-                     pow(point[1] - mice_y, 2), 0.5);
+      distances[i] = pow(point[0] - mice_x, 2)+
+                     pow(point[1] - mice_y, 2);
     }
     int index = min_element(distances.begin(), distances.end()) - distances.begin();
-    auto cell = cell_index[index];
-    return cell;
+    auto &cell = cell_index[index];
+    return {cell[0],cell[1]};
   }
 
 class ParallelPixelTransfer: public ParallelLoopBody
@@ -139,36 +140,36 @@ class ParallelPixelTransfer: public ParallelLoopBody
 
   }
 
+
+
  tuple<vector<double>, Mat> readCameraParameters(string jsonFilePath)
   // A function for reading camera parameres from the given path
   // Returns
   // A tuple containing lens distortion parameters and camera intrinsic parameters
  {
+    struct cameraParameters :json_cpp::Json_object {
+      Json_object_members(
+              Add_member (dist);
+              Add_member(intrinsic);
+              )
+      Json_vector<Json_vector<double>> dist;
+      Json_vector<Json_vector<double>> homography;
+      Json_vector<Json_vector<double>> intrinsic;
+      Json_vector<Json_vector<double>> extrinsic;
+    } params;
+    vector<double> distCoeffs(5);
+    cv::Mat cameraMatrix(3, 3, CV_64F);
 
-  vector<double> distCoeffs(5);
-  cv::Mat cameraMatrix(3, 3, CV_64F);
+    params.load(jsonFilePath);
 
-  std::ifstream cameraParametersFile(jsonFilePath, std::ifstream::binary);
-  Json::Value cameraParameters;
+    for(int i=0; i < 3; ++i)
+        for(int j=0; j < 3; ++j )
+            cameraMatrix.at<double>(i, j)= params.intrinsic[i][j];
 
+    for(int i=0; i < distCoeffs.size(); ++i)
+        distCoeffs[i] = params.dist[0][i];
 
-  cameraParametersFile >> cameraParameters;
-  auto intrinsic = cameraParameters["intrinsic"];
-
-  for(int i=0; i < 3; ++i)
-   {
-     for(int j=0; j < 3; ++j )
-     {
-       cameraMatrix.at<double>(i, j)= cameraParameters["intrinsic"][i][j].asDouble();
-     }
-   }
-  for(int i=0; i < distCoeffs.size(); ++i)
-  {
-    distCoeffs[i] = cameraParameters["dist"][0][i].asDouble();
-
-  }
-
-  return make_tuple(distCoeffs, cameraMatrix);
+    return make_tuple(distCoeffs, cameraMatrix);
  }
 
  void performLensCorrection(Mat& image, int imageNo, string lensCorrectionFolderPath)
@@ -198,42 +199,29 @@ class ParallelPixelTransfer: public ParallelLoopBody
   image = dst;
   }
 
-int getMaxAreaContourId(vector <vector<cv::Point>> contours, Point2f robotPosition) 
- // This function returns the id of the contour that has the maximum area in the image
- // Note: The maximum contour area has to greater than 600 or else -1 is returned.
- // This 600 is chosen in accordance with the minimum mice movement observed so that 
- // this function returns the contour ID containing the mice in the background subtracted 
- // image
+vector<double> getContoursArea(vector<vector<cv::Point>> &contours)
 {
-    double maxArea = 0;
-    int nearnessThreshold=200;
-    int maxAreaContourId = -1;
-    for (int j = 0; j < contours.size(); j++) {
-
-        auto M = moments(contours[j]);
-        int cx = int(M.m10 / M.m00);
-        int cy = int(M.m01 / M.m00);
-
-	if(pow(pow(cx-robotPosition.x, 2) + pow(cy - robotPosition.y, 2), 0.5) < nearnessThreshold)
-	{
-          continue;
-	}
-        double newArea = cv::contourArea(contours.at(j));
-        if (newArea > maxArea) {
-            maxArea = newArea;
-            maxAreaContourId = j;
-        }
-    }
-
-    if(maxArea > 600)
-    {
-      return maxAreaContourId;
-    }
-    else
-    {
-      return -1;
-    }
+    json_cpp::Json_vector<double> areas;
+    for (auto &contour:contours)
+        areas.push_back(cv::contourArea(contour));
+    //cout << areas << std::endl;
+    return areas;
 }
+
+vector<int> getDetections(vector<double> &areas, double lower_bound, double upper_bound)
+{
+      vector<int> detections;
+      for (int i = 0; i < areas.size() ; i++ )
+          if ( areas[i] >= lower_bound &&
+               ( upper_bound || areas[i] <= upper_bound ))
+              detections.push_back(i);
+      return detections;
+}
+
+vector<int> getDetections(vector<vector<cv::Point>> &contours, double lower_bound, double upper_bound){
+      auto areas = getContoursArea(contours);
+      return getDetections(areas, lower_bound, upper_bound);
+  }
 
 string return_date_header()
  // Returns the date header. The format is mm_dd
