@@ -6,14 +6,12 @@
 #include <iostream>
 
 
-#include "xcliball.h"
 #include "simple_capture.hpp"
+#include "xcliball.h"
 #include "utility_functions.hpp"
 
 
 using namespace std::chrono;
-
-
 
 using namespace cv::xfeatures2d;
 using std::cout;
@@ -23,10 +21,6 @@ using cv::waitKey;
 using cv::Mat;
 using std::to_string;
 using std::vector;
-
-
-
-
 
 frameGrabber::frameGrabber(const char* configPath, bool doLensCorrection_,
                            string lensCorrectionFolderPath_)

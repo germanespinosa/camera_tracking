@@ -10,7 +10,7 @@ set(CLIB_EXEC output)
 set(IMAGE_STITCH_EXEC image_stitching)
 SET(DRIVER_FLAGS "-DC_GNU64=400 -DOS_LINUX -no-pie")
 SET(CMAKE_CXX_FLAGS  "${DRIVER_FLAGS}")
-SET(CLIB_SOURCES src/simple_capture.cpp)
+SET(CLIB_SOURCES src/simple_capture.cpp include/controller.h include/detection.h include/image_processing.h)
 add_subdirectory(third_party/pybind11)
 include_directories(/usr/local/xclib/inc/)
 
@@ -23,7 +23,7 @@ add_executable(sample_capture ./src/record_samples.cpp ./src/record_samples_main
 	      ./src/image_stitching.cpp)
 add_executable(calibrate_homography ./src/calibrate_camera_homographies.cpp ./src/utility_functions.cpp)
 add_executable(back_ground_subt ./src/backGroundSubtraction.cpp ./src/record_samples.cpp ./src/simple_capture.cpp
-	       ./src/utility_functions.cpp ./src/image_stitching.cpp ./src/main.cpp)
+	       ./src/utility_functions.cpp ./src/image_stitching.cpp ./src/main.cpp src/controller.cpp src/detection.cpp src/image_processing.cpp)
 
 target_include_directories(${IMAGE_STITCH_EXEC} PRIVATE ./include/)
 target_include_directories(${CLIB_EXEC} PRIVATE ./include/)
