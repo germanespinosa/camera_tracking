@@ -10,12 +10,11 @@
 #include <iostream>
 #include <opencv2/aruco.hpp>
 #include "backGroundSubtraction.hpp"
-#include "utility_functions.hpp"
-#include "simple_capture.hpp"
 #include <json_cpp.h>
 #include <controller.h>
-#include<detection.h>
-#include <image_processing.h>
+#include <detection.h>
+#include <camera.h>
+#include "xcliball.h"
 
 using namespace cell_world;
 using namespace std::chrono;
@@ -29,23 +28,6 @@ using std::to_string;
 using cv::Size;
 using cv::Point;
 using cv::Scalar;
-
-int update_position(const string &agent, const Coordinates &coord){
-    struct Response: Json_object{
-        Json_object_members(
-                Add_member(code);
-                Add_member(message);
-        )
-        int code;
-        string message;
-    } response;
-    std::stringstream ss;
-    cout << "new " << agent << " position " << coord.x << "," << coord.y << endl;
-    ss << "http://192.168.137.1:8080/track/" << agent << "/" << coord.x << "/" << coord.y;
-    string url = ss.str();
-    Json_web_get(url).get_stream() >> response;
-    return response.code;
-}
 
 struct Coordinates_repetitions{
     Coordinates_list coordinates;
@@ -86,67 +68,114 @@ struct Coordinates_repetitions{
     }
 };
 
-int main()
+void ccc(cv::Mat &image){
+    Mat bw = ((image > 100) * 255);
+    Mat labels;
+    Mat stats;
+    Mat centroids;
+    int nLabels = connectedComponentsWithStats(bw,labels,stats,centroids,8);
+    //for (int i=0 ; i<centroids.cols);
+
+}
+
+int main(int argc, char **argv)
 {
+    if (argc == 1) {
+        cout << "Missing configuration parameter" << endl;
+        return 1;
+    }
+    string config_file(argv [1]);
+    Image_processing ip("./config/"+ config_file + ".config");
     Controller controller;
-    Image_processing ip("./config/video_config/new_white_light.fmt","./config/cameras_parameters.config");
-    int cameraCount = 4;
-    // Reading all cell association file
-    vector<Coordinates_associator> cellAssociation;
+    Agent_profiles profiles;
+    profiles.load("./config/agent_profile.config");
+    Coordinate_solver coordinate_solver;
+    coordinate_solver.load("./config/coordinate_solver.config");
+    vector<Camera_manager> cameras;
+    if (argc > 2){
+        string p(argv [2]);
+        if (p=="-c") {
+            string output_path;
+            if (argc < 4) {
+                output_path = ".";
+            } else {
+                output_path = argv[3];
+            }
+            ip.save_images(output_path);
+        }
+        if (p=="-s") {
+            if (argc < 4) {
+                cerr << "missing camera number parameter" << endl;
+                exit(1);
+            }
+            string camera_number(argv[3]);
+            int cam = stoi(camera_number);
+            cout << "showing camera " << cam << " in real time" << endl;
+            cv::Size ws{600, 600};
+            cv::Mat mouse_cut;
+            while (true) { ;
+                ip.capture_all();
+                cv::Mat subtracted = ip.cameras[cam].get_subtracted(false).clone();
 
-    cellAssociation.emplace_back("./config/cell_association/camera0.txt");
-    cellAssociation.emplace_back("./config/cell_association/camera1.txt");
-    cellAssociation.emplace_back("./config/cell_association/camera2.txt");
-    cellAssociation.emplace_back("./config/cell_association/camera3.txt");
+                Mat bw = ((subtracted > 50) * 255);
+                cv::Mat resized;
+                cv::resize(bw, resized, ws);
+                cv::imshow("subtracted", resized);
+                if (waitKey(10) > 0) break;
+            }
+        }
+        if (p=="-t"){
+            string camera_number (argv[3]);
+            cout << "showing camera 0 real time"<< endl;
+            int cam = stoi(camera_number);
+            cv::Size ws{600,600};
+            cv::Mat mouse_cut;
+            while (true) { ;
+                cv::Mat original = ip.cameras[cam].get_image(true).clone();
+                cv::Mat subtracted = ip.cameras[cam].get_subtracted(false).clone();
+                Mat bw = ((subtracted > 50) * 255);
+                Mat labels;
+                Mat stats;
+                Mat centroids;
+                int nLabels = connectedComponentsWithStats(bw,labels,stats,centroids,8);
+                for (int i = 0; i<centroids.rows ;i++){
+                    int area =  stats.at<int>(Point(4, i));
+                    if (area > 7000 && area < 10000) {
+                        double x = centroids.at<double>(0, i);
+                        double y = centroids.at<double>(1, i);
+                        cout << area << " " << i << " (" << x << "," << y << ")" << endl;
+                    }
+                }
+                cv::Mat resized;
+                cv::resize(bw, resized, ws);
+                cv::Mat inverted = original.clone();
+                inverted = 255;
+                inverted = inverted - original;
+                cv::imshow("subtracted", resized);
+                if (waitKey(500)>0) break;
+            }
+        }
 
-    // check if the camera video config fmt file is correct
-
-    Method method=MOG2;
-    vector<BackGroundSubtractor> bgsubs;
-    vector<Mat> frames;
-    ip.capture_all(true);
-    // Intialising four background subtractors one for each view of the camera
-    for(int i = 0; i<cameraCount; ++i)
-        bgsubs.emplace_back(method, ip.cameras[i].corrected_image, false);
-
-    vector<Vec4i> hierarchy;
-    bool first = true;
+        pxd_PIXCIclose();
+        return 0;
+    }
     Coordinates mouse;
-    Coordinates robot;
     Coordinates_repetitions mouse_repetitions;
-    Coordinates_repetitions robot_repetitions;
     while(true)
     {
         Coordinates_list mouse_candidates;
-        Coordinates_list robot_candidates;
-
-        ip.capture_all(true);
-        for(int i=0; i < cameraCount; ++i)
+        ip.capture_all();
+        for(auto &camera:cameras)
         {
-            vector<vector<Point>>contours;
-            auto foregroundImage = bgsubs[i].processImage(ip.cameras[i].corrected_image);
-            findContours( foregroundImage, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
-            auto mouse_candidates_id = getDetections(contours, 3500, 5500);
-            for (auto id : mouse_candidates_id){
-                auto M = moments(contours[id]);
-                auto cx = int(M.m10 / M.m00);
-                auto cy = int(M.m01 / M.m00);
-                mouse_candidates.push_back(cellAssociation[i].get_coordinates(cx, cy));
-            }
-            auto robot_candidates_id = getDetections(contours, 400, 0);
-            for (auto id : robot_candidates_id){
-                auto M = moments(contours[id]);
-                auto cx = int(M.m10 / M.m00);
-                auto cy = int(M.m01 / M.m00);
-                robot_candidates.push_back(cellAssociation[i].get_coordinates(cx, cy));
-            }
+            auto candidates = camera.get_detections();
+            for (auto &c : candidates)
+                if (c.agent == "mouse") mouse_candidates.push_back(c.coordinates);
         }
         auto best_mouse = mouse_repetitions.get_coordinates(mouse_candidates);
         if (best_mouse!=Coordinates{1000,1000})
             if (mouse != best_mouse) {
                 cout << mouse << endl;
                 mouse = best_mouse;
-                controller.track_agent("mouse", mouse);
             }
         if(waitKey(2) == 27) break;
     }
