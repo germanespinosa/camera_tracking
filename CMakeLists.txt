@@ -18,7 +18,7 @@ set( maze_cv_files
 	 src/camera.cpp
 	 src/controller.cpp
 	 src/detection.cpp
-	 src/cell_association.cpp include/core.h include/tracking.h src/tracking.cpp include/agent_profile.h src/agent_profile.cpp tools/capture.cpp)
+	 src/cell_association.cpp include/core.h include/tracking.h src/tracking.cpp include/agent_profile.h src/agent_profile.cpp tools/capture.cpp include/util.h src/util.cpp)
 
 
 SET(CMAKE_CXX_FLAGS  "-DC_GNU64=400 -DOS_LINUX -no-pie")

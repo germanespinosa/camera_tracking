@@ -1,4 +1,4 @@
-#include <sys/stat.h>
+#include <util.h>
 #include <camera.h>
 #include <iostream>
 #include "xcliball.h"
@@ -67,6 +67,10 @@ cv::Mat &Camera::get_image(bool new_image) {
 }
 
 void Camera::init(const string &config_file_path) {
+    if (!file_exists(config_file_path)) {
+        cerr << "configuration file " << config_file_path << " not found" << endl;
+        exit(1);
+    }
     pxd_PIXCIopen("", "", config_file_path.c_str());
     if (pxd_goLive(15, 1)){
         cerr << "Failed to initialize frame grabbers" << endl;
@@ -104,8 +108,7 @@ void Camera::save_image(const string &file_path) {
 
 void Camera::load_background(const std::string &file_path) {
     background_path = file_path;
-    struct stat buffer;
-    if  (stat (file_path.c_str(), &buffer) == 0) {
+    if (file_exists(file_path)){
         cv::Mat bg = cv::imread(file_path);
         set_background(bg);
     }
