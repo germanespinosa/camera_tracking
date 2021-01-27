@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include <camera.h>
 #include <iostream>
 #include "xcliball.h"
@@ -8,19 +9,17 @@
 using namespace std;
 using namespace json_cpp;
 
-unsigned int Camera::camera_count = 0;
-cv::Size Camera::image_size = {0,0};
+unsigned int Camera::camera_count;
+cv::Size Camera::image_size;
 
 Image_processing::Image_processing(const string &config_file) {
-    Image_processing_parameters ipp;
-    ipp.load(config_file);
-    Camera::init(ipp.configuration_file);
-    for (int camera_number = 0; camera_number < ipp.camera_count; camera_number ++) {
+    parameters.load(config_file);
+    Camera::init(parameters.configuration_file);
+    for (int camera_number = 0; camera_number < parameters.camera_count; camera_number ++) {
         cameras.emplace_back();
         stringstream ss;
-        ss << ipp.backgrounds_folder << "/camera_" << camera_number << ".png";
-        cv::Mat background = cv::imread(ss.str());
-        cameras.back().set_background(background);
+        ss << parameters.backgrounds_folder << "/camera_" << camera_number << ".png";
+        cameras.back().load_background(ss.str());
     }
 }
 
@@ -39,12 +38,17 @@ void Image_processing::save_images(const string &path) {
     for (int i =0; i < cameras.size();i++){
         stringstream ss;
         ss << path << "/camera_" << i << ".png";
-        cv::imwrite(ss.str(), cameras[i].image);
+        cameras[i].save_image(ss.str());
     }
 }
 
+void Image_processing::save_backgrounds() {
+    save_images(parameters.backgrounds_folder);
+}
+
 Camera::Camera() :
-    grabber_bit_map(1 << Camera::camera_count)
+    grabber_bit_map(1 << Camera::camera_count),
+    camera_number(Camera::camera_count)
 {
     Camera::camera_count++;
     frame_size = Camera::image_size.width  * Camera::image_size.height;
@@ -62,7 +66,7 @@ cv::Mat &Camera::get_image(bool new_image) {
     return image;
 }
 
-void Camera::init(string &config_file_path) {
+void Camera::init(const string &config_file_path) {
     pxd_PIXCIopen("", "", config_file_path.c_str());
     if (pxd_goLive(15, 1)){
         cerr << "Failed to initialize frame grabbers" << endl;
@@ -90,6 +94,23 @@ void Camera::subtract(){
     is_subtracted = true;
 }
 
-void Camera::set_background(cv::Mat background_image) {
+void Camera::set_background(const cv::Mat& background_image) {
     cv::cvtColor(background_image, background, cv::COLOR_BGR2GRAY);
+}
+
+void Camera::save_image(const string &file_path) {
+    cv::imwrite(file_path, image);
+}
+
+void Camera::load_background(const std::string &file_path) {
+    background_path = file_path;
+    struct stat buffer;
+    if  (stat (file_path.c_str(), &buffer) == 0) {
+        cv::Mat bg = cv::imread(file_path);
+        set_background(bg);
+    }
+}
+
+void Camera::save_background() {
+    save_image(background_path);
 }
